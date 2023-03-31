@@ -23,6 +23,7 @@ services:
     volumes:
       - ./root/initialdata.sh:/root/initialdata.sh
       - ./root/conf/keystore:/root/conf/keystore
+      - ./root/conf/imapserver.xml:/root/conf/imapserver.xml
       - ./root/conf/listeners.xml:/root/conf/listeners.xml
       - ./root/extensions-jars:/root/extensions-jars/
       - ./logs:/logs
