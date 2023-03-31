@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  james:
+  platox-ai-james:
     # depends_on:
     #   - opensearch
     #   - cassandra
@@ -9,7 +9,7 @@ services:
     #   - rabbitmq
     #   - s3
     image: apache/james:demo-latest
-    container_name: platox-ai-james
+    # container_name: platox-ai-james
     # hostname: james.local
     ports:
       - "885:80"
