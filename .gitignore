@@ -7,7 +7,9 @@ dockerfiles/run/**/glowroot
 .m2
 test-run.log
 build
+
 .vscode
 .DS_Store
-docker-deploy/logs/*
-docker-deploy/root/extensions-jars/*
+docker-deploy/logs/*.log
+docker-deploy/logs/emails/
+docker-deploy/root/extensions-jars/*.jar
