@@ -1,0 +1,50 @@
+# This workflow will build a package using Maven and then publish it to GitHub packages when a release is created
+# For more information see: https://github.com/actions/setup-java/blob/main/docs/advanced-usage.md#apache-maven-with-a-settings-path
+
+name: Maven Package CICD
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
+        settings-path: ${{ github.workspace }} # location for the settings.xml file
+
+    - name: Build with Maven
+      run: mvn -B package --file examples/custom-listeners/pom.xml
+
+#     - name: Publish to GitHub Packages Apache Maven
+#       run: mvn deploy -s $GITHUB_WORKSPACE/settings.xml
+#       env:
+#         GITHUB_TOKEN: ${{ github.token }}
+        
+    - name: Install SSH key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ secrets.SSH_KEY }}
+        known_hosts: 'placeholder'
+        # if_key_exists: replace # replace / ignore / fail; optional (defaults to fail)
+        
+    - name: Adding Known Hosts
+      run: ssh-keyscan -H -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+      
+    - name: Upload jar to Server
+      run: rsync -avz --delete -e "ssh -p ${{ secrets.SSH_PORT }}" examples/custom-listeners/target/*.jar  ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ secrets.SERVER_JAR_FOLDER }}
+    
+    - name: Server Refresh Container
+      run: echo ${{ secrets.SUDO_PASS }} | ssh -tt ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} ${{ secrets.HOST_COMMAND }}
