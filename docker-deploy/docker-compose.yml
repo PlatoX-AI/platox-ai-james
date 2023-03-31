@@ -22,7 +22,6 @@ services:
       - "886:8000"
     volumes:
       - ./root/initialdata.sh:/root/initialdata.sh
-      - ./root/conf/keystore:/root/conf/keystore
       - ./root/conf/cert.pem:/root/conf/cert.pem
       - ./root/conf/privkey.pem:/root/conf/privkey.pem
       - ./root/conf/imapserver.xml:/root/conf/imapserver.xml
@@ -30,5 +29,6 @@ services:
       - ./root/conf/listeners.xml:/root/conf/listeners.xml
       - ./root/extensions-jars:/root/extensions-jars/
       - ./logs:/logs
+      # - ./root/conf/keystore:/root/conf/keystore
       # - ./root/glowroot/plugins:/root/glowroot/plugins
       # - ./root/glowroot/data:/root/glowroot/data
