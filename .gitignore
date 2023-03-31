@@ -9,3 +9,5 @@ test-run.log
 build
 .vscode
 .DS_Store
+docker-deploy/logs/*
+docker-deploy/root/extensions-jars/*
