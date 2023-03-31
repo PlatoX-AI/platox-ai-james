@@ -13,3 +13,4 @@ build
 docker-deploy/logs/*.log
 docker-deploy/logs/emails/
 docker-deploy/root/extensions-jars/*.jar
+examples/custom-listeners/body.log

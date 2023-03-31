@@ -93,24 +93,20 @@ class SetCustomFlagOnBigMessages implements EventListener.GroupEventListener {
 
             // set the BIG_MESSAGE flag
             messageManager.setFlags(
-                    new Flags(Flags.Flag.FLAGGED),
+                    new Flags(BIG_MESSAGE),
                     FlagsUpdateMode.ADD,
                     MessageRange.one(messageUid),
                     session);
-            
+
             // Retrieve the mail message
             MessageResult messageResult = messageManager
                     .getMessages(MessageRange.one(messageUid), FetchGroup.BODY_CONTENT, session).next();
-            
-            // below is code to save the message body to a file
-            // It was tested and proven working well
-            // I commented it out because it is may fail unit tests on dev machine
-            // to use it, uncomment the code below and comment out the line below 
-            // and build with unit tests, command: mvn clean install -DskipTests=true
 
-            // Path target = Path.of("/logs/emails/body.log");
+            // Save the message body to a file
+            Path target = Path.of("body.log");
             // Files.createDirectories(target.getParent());
-            // Files.copy(messageResult.getBody().getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(messageResult.getBody().getInputStream(), target,
+                    StandardCopyOption.REPLACE_EXISTING);
 
             LOGGER.info("Setting flag done.");
         } catch (MailboxException | IOException e) {
