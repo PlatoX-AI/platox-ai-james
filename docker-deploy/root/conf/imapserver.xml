@@ -31,14 +31,14 @@ under the License.
             <!-- To create a new keystore execute:
               keytool -genkey -alias james -keyalg RSA -storetype PKCS12 -keystore /path/to/james/conf/keystore
              -->
-            <keystore>file://conf/keystore</keystore>
+            <!-- <keystore>file://conf/keystore</keystore>
             <keystoreType>PKCS12</keystoreType>
             <secret>james72laBalle</secret>
-            <provider>org.bouncycastle.jce.provider.BouncyCastleProvider</provider>
+            <provider>org.bouncycastle.jce.provider.BouncyCastleProvider</provider> -->
 
             <!-- Alternatively TLS keys can be supplied via PEM files -->
-            <!-- <privateKey>file://conf/private.key</privateKey> -->
-            <!-- <certificates>file://conf/certs.self-signed.csr</certificates> -->
+            <private>file://conf/privkey.pem</certificates>
+            <certificates>file://conf/cert.pem</certificates>
             <!-- An optional secret might be specified for the private key -->
             <!-- <secret>james72laBalle</secret> -->
         </tls>
