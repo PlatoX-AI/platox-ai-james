@@ -36,8 +36,8 @@ import org.apache.james.mailbox.exception.MailboxException;
 import org.apache.james.mailbox.model.MessageRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.net.URL;
-import java.net.http.HttpURLConnection;
+import java.net.*;
+import java.io.*;
 
 
 /**
@@ -55,10 +55,6 @@ class PlatoXAINotifier implements EventListener.GroupEventListener {
     private static final PositionCustomFlagOnBigMessagesGroup GROUP = new PositionCustomFlagOnBigMessagesGroup();
     private static final Logger LOGGER = LoggerFactory.getLogger(SetCustomFlagOnBigMessages.class);
 
-    static final long ONE_MB = 1000L * 1000L;
-
-    static String BIG_MESSAGE = "BIG_MESSAGE";
-
     private final MailboxManager mailboxManager;
 
     @Inject
@@ -71,36 +67,45 @@ class PlatoXAINotifier implements EventListener.GroupEventListener {
         if (event instanceof Added) {
             Added addedEvent = (Added) event;
             addedEvent.getUids().stream()
-                .forEach(messageUid -> setBigMessageFlag(addedEvent, messageUid));
-            // addedEvent.getUids().stream()
-            //     .filter(messageUid -> isBig(addedEvent, messageUid))
-            //     .forEach(messageUid -> );
+                .forEach(messageUid -> SendNotification(addedEvent, messageUid));
         }
     }
 
-    private boolean isBig(Added addedEvent, MessageUid messageUid) {
-        return addedEvent.getMetaData(messageUid).getSize() >= ONE_MB;
-    }
-
-    private void setBigMessageFlag(Added addedEvent, MessageUid messageUid) {
+    private void SendNotification(Added addedEvent, MessageUid messageUid) {
+        String urlStr = "https://api.myip.com";
         try {
             MailboxSession session = mailboxManager.createSystemSession(addedEvent.getUsername());
             MessageManager messageManager = mailboxManager.getMailbox(addedEvent.getMailboxId(), session);
 
-            // URL url = new URL("https://api.myip.com");
-            // HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            // con.setRequestMethod("GET");
-            LOGGER.info(addedEvent.getUsername() + "Received Message." );
+            LOGGER.info("Message Received, with uid {} in mailbox {} of user {}",
+            messageUid.asLong(), addedEvent.getMailboxId(), addedEvent.getUsername().asString());
 
-            // messageManager.setFlags(
-            //     new Flags(BIG_MESSAGE),
-            //     FlagsUpdateMode.ADD,
-            //     MessageRange.one(messageUid),
-            //     session);
+            URL url = new URL(urlStr);
+            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            con.setRequestMethod("GET");
+            con.connect();
+            int status = con.getResponseCode();
+            String body = "";
+            switch(status) {
+                case 200:
+                case 201:
+                    BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        sb.append(line+"\n");
+                    }
+                    br.close();
+                    body = sb.toString();
+                    break;
+            }
+            LOGGER.info("Rquested URL: " + urlStr + " Response: " + status + " Body: " + body);
+            System.out.flush();
+
             mailboxManager.endProcessingRequest(session);
-        } catch (MailboxException e) {
-            LOGGER.error("error happens when adding '{}' flag to the message with uid {} in mailbox {} of user {}",
-                BIG_MESSAGE, messageUid.asLong(), addedEvent.getMailboxId(), addedEvent.getUsername().asString(), e);
+        } catch (Exception e) {
+            LOGGER.error("error happens when requesting URL {}, {}", urlStr, e.getMessage());
+            System.out.flush();
         }
     }
 
