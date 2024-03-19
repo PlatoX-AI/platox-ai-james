@@ -38,7 +38,7 @@ import org.apache.james.jmap.core.CapabilityIdentifier.{CapabilityIdentifier, EM
 import org.apache.james.jmap.core.Id.{Id, IdConstraint}
 import org.apache.james.jmap.core.Invocation.{Arguments, MethodName}
 import org.apache.james.jmap.core.SetError.{SetErrorDescription, SetErrorType}
-import org.apache.james.jmap.core.{ClientId, Invocation, Properties, ServerId, SessionTranslator, SetError, SubmissionCapabilityFactory, UTCDate, UuidState}
+import org.apache.james.jmap.core.{ClientId, Invocation, JmapRfc8621Configuration, Properties, ServerId, SessionTranslator, SetError, SubmissionCapabilityFactory, UTCDate, UuidState}
 import org.apache.james.jmap.json.EmailSubmissionSetSerializer
 import org.apache.james.jmap.mail.{EmailSubmissionAddress, EmailSubmissionCreationId, EmailSubmissionCreationRequest, EmailSubmissionCreationResponse, EmailSubmissionId, EmailSubmissionSetRequest, EmailSubmissionSetResponse, Envelope, ParameterName, ParameterValue}
 import org.apache.james.jmap.method.EmailSubmissionSetMethod.{CreationFailure, CreationResult, CreationResults, CreationSuccess, LOGGER, MAIL_METADATA_USERNAME_ATTRIBUTE, NO_DELAY, VALID_PARAMETER_NAME_SET, formatter}
@@ -167,6 +167,7 @@ case class MessageMimeMessageSource(id: String, message: MessageResult) extends 
 }
 
 class EmailSubmissionSetMethod @Inject()(serializer: EmailSubmissionSetSerializer,
+                                         configuration: JmapRfc8621Configuration,
                                          messageIdManager: MessageIdManager,
                                          mailQueueFactory: MailQueueFactory[_ <: MailQueue],
                                          canSendFrom: CanSendFrom,
@@ -211,10 +212,10 @@ class EmailSubmissionSetMethod @Inject()(serializer: EmailSubmissionSetSerialize
         SFlux.concat(SMono.just(explicitInvocation), emailSetCall)
       })
 
-  override def getRequest(mailboxSession: MailboxSession, invocation: Invocation): Either[IllegalArgumentException, EmailSubmissionSetRequest] =
+  override def getRequest(mailboxSession: MailboxSession, invocation: Invocation): Either[Exception, EmailSubmissionSetRequest] =
     serializer.deserializeEmailSubmissionSetRequest(invocation.arguments.value)
       .asEitherRequest
-      .flatMap(_.validate)
+      .flatMap(_.validate(configuration))
 
   private def create(request: EmailSubmissionSetRequest,
                      session: MailboxSession,
@@ -269,6 +270,7 @@ class EmailSubmissionSetMethod @Inject()(serializer: EmailSubmissionSetSerialize
         .switchIfEmpty(SMono.error(MessageNotFoundException(request.emailId)))
       submissionId = EmailSubmissionId.generate
       message <- SMono.fromTry(toMimeMessage(submissionId.value, message))
+      _ <- validateMimeMessages(message)
       envelope <- SMono.fromTry(resolveEnvelope(message, request.envelope))
       _ <- validate(mailboxSession)(message, envelope)
       _ <- SMono.fromTry(validateFromParameters(envelope.mailFrom.parameters))
@@ -347,6 +349,29 @@ class EmailSubmissionSetMethod @Inject()(serializer: EmailSubmissionSetSerialize
     } else {
       Failure(new IllegalArgumentException("Invalid delayed time!"))
     }
+
+  def validateMimeMessages(mimeMessage: MimeMessage) : SMono[MimeMessage] = validateMailAddressHeaderMimeMessage(mimeMessage)
+  private def validateMailAddressHeaderMimeMessage(mimeMessage: MimeMessage): SMono[MimeMessage] =
+    SFlux.fromIterable(Map("to" -> Option(mimeMessage.getRecipients(RecipientType.TO)).toList.flatten,
+        "cc" -> Option(mimeMessage.getRecipients(RecipientType.CC)).toList.flatten,
+        "bcc" -> Option(mimeMessage.getRecipients(RecipientType.BCC)).toList.flatten,
+        "from" -> Option(mimeMessage.getFrom).toList.flatten,
+        "sender" -> Option(mimeMessage.getSender).toList,
+        "replyTo" -> Option(mimeMessage.getReplyTo).toList.flatten))
+      .doOnNext { case (headerName, addresses) => (headerName, addresses.foreach(address => validateMailAddress(headerName, address))) }
+      .`then`()
+      .`then`(SMono.just(mimeMessage))
+
+  private def validateMailAddress(headName: String, address: Address): MailAddress =
+    Try(new MailAddress(asString(address))) match {
+      case Success(mailAddress) => mailAddress
+      case Failure(_) => throw new IllegalArgumentException(s"Invalid mail address: $address in $headName header")
+    }
+
+  private def asString(address: Address): String = address match {
+    case a: InternetAddress => a.getAddress
+    case _ => address.toString
+  }
 
   def validateRcptTo(recipients: List[EmailSubmissionAddress]): SMono[List[EmailSubmissionAddress]] =
     SFlux.fromIterable(recipients)

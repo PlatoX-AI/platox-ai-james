@@ -17,20 +17,48 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.rabbitmq.cucumber.awss3;
+package org.apache.james.jmap.mime4j;
 
-import org.apache.james.jmap.categories.EnableCucumber;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 
-import cucumber.api.CucumberOptions;
-import cucumber.api.junit.Cucumber;
+import org.apache.commons.lang3.NotImplementedException;
+import org.apache.james.mime4j.dom.BinaryBody;
+import org.apache.james.mime4j.dom.SingleBody;
 
-@RunWith(Cucumber.class)
-@CucumberOptions(features = "classpath:cucumber/ImapKeywordsConsistency.feature",
-    glue = {"org.apache.james.jmap.draft.methods.integration", "org.apache.james.jmap.rabbitmq.cucumber.awss3"},
-    tags = {"not @Ignore", "@BasicFeature"},
-    strict = true)
-@Category(EnableCucumber.class)
-public class RabbitMQIMAPKeywordsInconsistenciesTest {
+public class FakeBinaryBody extends BinaryBody {
+    private final long size;
+
+    FakeBinaryBody(long size) {
+        this.size = size;
+    }
+
+    @Override
+    public InputStream getInputStream() throws IOException {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public void writeTo(OutputStream out) throws IOException {
+        throw new NotImplementedException();
+    }
+
+    @Override
+    public long size() {
+        return size;
+    }
+
+    public long getSize() {
+        return size;
+    }
+
+    @Override
+    public void dispose() {
+    }
+
+    @Override
+    public SingleBody copy() {
+        return new FakeBinaryBody(size);
+    }
 }

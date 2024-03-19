@@ -52,6 +52,23 @@ object IdentityCreationRequest {
       textSignature = textSignature.toScala.map(TextSignature(_)),
       htmlSignature = htmlSignature.toScala.map(HtmlSignature(_)))
   }
+
+  def from(name: Option[IdentityName],
+            email: MailAddress,
+            replyTo: Option[List[EmailAddress]],
+            bcc: Option[List[EmailAddress]],
+            sortOrder: Option[Int] = None,
+            textSignature: Option[TextSignature],
+            htmlSignature: Option[HtmlSignature]): IdentityCreationRequest = {
+    IdentityCreationRequest(
+      name = name,
+      email = email,
+      replyTo = replyTo,
+      bcc = bcc,
+      sortOrder = sortOrder,
+      textSignature = textSignature,
+      htmlSignature = htmlSignature)
+  }
 }
 
 case class IdentityCreationRequest(name: Option[IdentityName],
@@ -60,7 +77,8 @@ case class IdentityCreationRequest(name: Option[IdentityName],
                                    bcc: Option[List[EmailAddress]],
                                    sortOrder: Option[Int] = None,
                                    textSignature: Option[TextSignature],
-                                   htmlSignature: Option[HtmlSignature]) {
+                                   htmlSignature: Option[HtmlSignature],
+                                   mayDeleteIdentity: MayDeleteIdentity = MayDeleteIdentity(true)) {
   def asIdentity(id: IdentityId): Identity = Identity(
     id = id,
     name = name.getOrElse(IdentityName.DEFAULT),
@@ -69,7 +87,7 @@ case class IdentityCreationRequest(name: Option[IdentityName],
     bcc = bcc,
     textSignature = textSignature.getOrElse(TextSignature.DEFAULT),
     htmlSignature = htmlSignature.getOrElse(HtmlSignature.DEFAULT),
-    mayDelete = MayDeleteIdentity(true),
+    mayDelete = mayDeleteIdentity,
     sortOrder = sortOrder.getOrElse(Identity.DEFAULT_SORTORDER))
 }
 
@@ -123,14 +141,15 @@ case class IdentityUpdateRequest(name: Option[IdentityNameUpdate] = None,
       .flatten
       .foldLeft(identity)((acc, update) => update.update(acc))
 
-  def asCreationRequest(email: MailAddress): IdentityCreationRequest =
+  def asCreationRequest(email: MailAddress, mayDelete: Boolean): IdentityCreationRequest =
     IdentityCreationRequest(
       name = name.map(_.name),
       email = email,
       replyTo = replyTo.flatMap(_.replyTo),
       bcc = bcc.flatMap(_.bcc),
       textSignature = textSignature.map(_.textSignature),
-      htmlSignature = htmlSignature.map(_.htmlSignature))
+      htmlSignature = htmlSignature.map(_.htmlSignature),
+      mayDeleteIdentity = MayDeleteIdentity(mayDelete))
 }
 
 trait CustomIdentityDAO {
@@ -146,7 +165,7 @@ trait CustomIdentityDAO {
 
   def upsert(user: Username, patch: Identity): SMono[Unit]
 
-  def delete(username: Username, ids: Seq[IdentityId]): Publisher[Unit]
+  def delete(username: Username, ids: Set[IdentityId]): Publisher[Unit]
 
   def delete(username: Username): Publisher[Unit]
 }
@@ -223,7 +242,7 @@ class IdentityRepository @Inject()(customIdentityDao: CustomIdentityDAO, identit
       .flatMap {
         case (None, None) => SMono.error(IdentityNotFoundException(identityId))
         case (Some(_), Some(customIdentity)) => customIdentityDao.upsert(user, identityUpdateRequest.update(customIdentity))
-        case (Some(serverSetIdentity), None) => SMono(customIdentityDao.save(user, identityId, identityUpdateRequest.asCreationRequest(serverSetIdentity.email)))
+        case (Some(serverSetIdentity), None) => SMono(customIdentityDao.save(user, identityId, identityUpdateRequest.asCreationRequest(serverSetIdentity.email, mayDelete = false)))
         case (None, Some(customIdentity)) =>
           identityFactory.userCanSendFrom(user, customIdentity.email)
             .filter(bool => bool)
@@ -233,9 +252,9 @@ class IdentityRepository @Inject()(customIdentityDao: CustomIdentityDAO, identit
       .`then`()
   }
 
-  def delete(username: Username, ids: Seq[IdentityId]): Publisher[Unit] =
+  def delete(username: Username, ids: Set[IdentityId]): Publisher[Unit] =
     SMono.just(ids)
-      .handle[Seq[IdentityId]]{
+      .handle[Set[IdentityId]]{
         case (ids, sink) => if (identityFactory.isServerSetIdentity(username, ids.head)) {
           sink.error(IdentityForbiddenDeleteException(ids.head))
         } else {
@@ -259,13 +278,13 @@ object IdentityWithOrigin {
   case class CustomIdentityOrigin(inputIdentity: Identity) extends IdentityWithOrigin {
     override def identity: Identity = inputIdentity
 
-    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = this
+    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = CustomIdentityOrigin(identity.copy(mayDelete = MayDeleteIdentity(false)))
   }
 
   case class ServerSetIdentityOrigin(inputIdentity: Identity) extends IdentityWithOrigin {
     override def identity: Identity = inputIdentity
 
-    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = other
+    override def merge(other: IdentityWithOrigin): IdentityWithOrigin = CustomIdentityOrigin(other.identity.copy(mayDelete = MayDeleteIdentity(false)))
   }
 
   def fromCustom(identity: Identity): IdentityWithOrigin = CustomIdentityOrigin(identity)

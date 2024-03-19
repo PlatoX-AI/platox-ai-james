@@ -36,7 +36,7 @@ import org.apache.james.jmap.api.model.Size.{Size, sanitizeSize}
 import org.apache.james.jmap.api.model.{EmailAddress, Preview}
 import org.apache.james.jmap.api.projections.{MessageFastViewPrecomputedProperties, MessageFastViewProjection}
 import org.apache.james.jmap.core.Id.{Id, IdConstraint}
-import org.apache.james.jmap.core.{Properties, UTCDate}
+import org.apache.james.jmap.core.{JmapRfc8621Configuration, Properties, UTCDate}
 import org.apache.james.jmap.mail.BracketHeader.sanitize
 import org.apache.james.jmap.mail.EmailFullViewFactory.extractBodyValues
 import org.apache.james.jmap.mail.EmailGetRequest.MaxBodyValueBytes
@@ -44,7 +44,7 @@ import org.apache.james.jmap.mail.EmailHeaderName.{ADDRESSES_NAMES, DATE, MESSAG
 import org.apache.james.jmap.mail.FastViewWithAttachmentsMetadataReadLevel.supportedByFastViewWithAttachments
 import org.apache.james.jmap.mail.KeywordsFactory.LENIENT_KEYWORDS_FACTORY
 import org.apache.james.jmap.method.ZoneIdProvider
-import org.apache.james.jmap.mime4j.JamesBodyDescriptorBuilder
+import org.apache.james.jmap.mime4j.{AvoidBinaryBodyBufferingBodyFactory, JamesBodyDescriptorBuilder}
 import org.apache.james.mailbox.model.FetchGroup.{FULL_CONTENT, HEADERS, HEADERS_WITH_ATTACHMENTS_METADATA, MINIMAL}
 import org.apache.james.mailbox.model.{FetchGroup, MailboxId, MessageId, MessageResult, ThreadId => JavaThreadId}
 import org.apache.james.mailbox.{MailboxSession, MessageIdManager}
@@ -52,7 +52,7 @@ import org.apache.james.mime4j.codec.DecodeMonitor
 import org.apache.james.mime4j.dom.field.{AddressListField, DateTimeField, MailboxField, MailboxListField}
 import org.apache.james.mime4j.dom.{Header, Message}
 import org.apache.james.mime4j.field.{AddressListFieldLenientImpl, LenientFieldParser}
-import org.apache.james.mime4j.message.{BasicBodyFactory, DefaultMessageBuilder}
+import org.apache.james.mime4j.message.DefaultMessageBuilder
 import org.apache.james.mime4j.stream.{Field, MimeConfig, RawFieldParser}
 import org.apache.james.mime4j.util.MimeUtil
 import org.apache.james.util.AuditTrail
@@ -118,13 +118,6 @@ object Email {
         }
     }
 
-  def validateIdsSize(request: EmailGetRequest, maxSize: Long, chain: Properties): Either[Exception, Properties] =
-    if (EmailGetRequest.readLevel(request).equals(FullReadLevel) && request.ids.exists(_.value.size > maxSize)) {
-      Left(RequestTooLargeException(s"Too many items in an email read at level FULL. Got ${request.ids.get.value.size} items instead of maximum ${maxSize}."))
-    } else {
-      scala.Right(chain)
-    }
-
   def asUnparsed(messageId: MessageId): Try[UnparsedEmailId] =
     refined.refineV[IdConstraint](messageId.serialize()) match {
       case Left(e) => Failure(new IllegalArgumentException(e))
@@ -138,7 +131,7 @@ object Email {
     defaultMessageBuilder.setMimeEntityConfig(MimeConfig.PERMISSIVE)
     defaultMessageBuilder.setDecodeMonitor(DecodeMonitor.SILENT)
     defaultMessageBuilder.setBodyDescriptorBuilder(new JamesBodyDescriptorBuilder(null, LenientFieldParser.getParser, DecodeMonitor.SILENT))
-    defaultMessageBuilder.setBodyFactory(new BasicBodyFactory(defaultCharset))
+    defaultMessageBuilder.setBodyFactory(new AvoidBinaryBodyBufferingBodyFactory(defaultCharset))
     val resultMessage = Try(defaultMessageBuilder.parseMessage(inputStream))
     resultMessage.fold(e => {
       Try(inputStream.close())
@@ -363,14 +356,14 @@ object EmailHeaders {
           .map(_.flatten))
         .filter(_.nonEmpty))
 
-  private def extractAddresses(mime4JMessage: Message, fieldName: String): Option[AddressesHeaderValue] =
+  private def extractAddresses(mime4JMessage: Message, fieldName: String): Option[UncheckedAddressesHeaderValue] =
     extractLastField(mime4JMessage, fieldName)
       .flatMap {
-        case f: AddressListField => Some(AddressesHeaderValue(EmailAddress.from(f.getAddressList)))
-        case f: MailboxListField => Some(AddressesHeaderValue(EmailAddress.from(f.getMailboxList)))
+        case f: AddressListField => Some(UncheckedAddressesHeaderValue(UncheckedEmailAddress.from(f.getAddressList)))
+        case f: MailboxListField => Some(UncheckedAddressesHeaderValue(UncheckedEmailAddress.from(f.getMailboxList)))
         case f: MailboxField =>
           val asMailboxListField = AddressListFieldLenientImpl.PARSER.parse(RawFieldParser.DEFAULT.parseField(f.getRaw), DecodeMonitor.SILENT)
-          Some(AddressesHeaderValue(EmailAddress.from(asMailboxListField.getAddressList)))
+          Some(UncheckedAddressesHeaderValue(UncheckedEmailAddress.from(asMailboxListField.getAddressList)))
         case _ => None
       }
       .filter(_.value.nonEmpty)
@@ -392,12 +385,12 @@ case class EmailHeaders(headers: List[EmailHeader],
                         messageId: MessageIdsHeaderValue,
                         inReplyTo: MessageIdsHeaderValue,
                         references: MessageIdsHeaderValue,
-                        to: Option[AddressesHeaderValue],
-                        cc: Option[AddressesHeaderValue],
-                        bcc: Option[AddressesHeaderValue],
-                        from: Option[AddressesHeaderValue],
-                        sender: Option[AddressesHeaderValue],
-                        replyTo: Option[AddressesHeaderValue],
+                        to: Option[UncheckedAddressesHeaderValue],
+                        cc: Option[UncheckedAddressesHeaderValue],
+                        bcc: Option[UncheckedAddressesHeaderValue],
+                        from: Option[UncheckedAddressesHeaderValue],
+                        sender: Option[UncheckedAddressesHeaderValue],
+                        replyTo: Option[UncheckedAddressesHeaderValue],
                         subject: Option[Subject],
                         sentAt: Option[UTCDate])
 

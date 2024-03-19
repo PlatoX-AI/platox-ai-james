@@ -28,6 +28,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.inject.Inject;
 
@@ -59,6 +60,8 @@ import org.apache.james.metrics.api.MetricFactory;
 import org.apache.james.util.AuditTrail;
 import org.apache.james.util.MDCBuilder;
 import org.apache.james.util.ReactorUtils;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,8 +73,62 @@ import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongList;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 public class FetchProcessor extends AbstractMailboxProcessor<FetchRequest> {
+    static class FetchSubscriber implements Subscriber<FetchResponse> {
+        private final AtomicReference<Subscription> subscription = new AtomicReference<>();
+        private final Sinks.One<Void> sink = Sinks.one();
+        private final ImapSession imapSession;
+        private final Responder responder;
+
+        FetchSubscriber(ImapSession imapSession, Responder responder) {
+            this.imapSession = imapSession;
+            this.responder = responder;
+        }
+
+        @Override
+        public void onSubscribe(Subscription subscription) {
+            this.subscription.set(subscription);
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(FetchResponse fetchResponse) {
+            responder.respond(fetchResponse);
+            if (imapSession.backpressureNeeded(this::requestOne)) {
+                LOGGER.debug("Applying backpressure as we encounter a slow reader");
+            } else {
+                requestOne();
+            }
+        }
+
+        private void requestOne() {
+            Optional.ofNullable(subscription.get())
+                .ifPresent(s -> s.request(1));
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            subscription.set(null);
+            sink.tryEmitError(throwable);
+        }
+
+        @Override
+        public void onComplete() {
+            subscription.set(null);
+            sink.tryEmitEmpty();
+        }
+
+        public Mono<Void> completionMono() {
+            return sink.asMono()
+                .doOnCancel(() -> {
+                    Optional.ofNullable(subscription.get()).ifPresent(Subscription::cancel);
+                    subscription.set(null);
+                });
+        }
+    }
+
     private static final Logger LOGGER = LoggerFactory.getLogger(FetchProcessor.class);
 
     @Inject
@@ -148,7 +205,7 @@ public class FetchProcessor extends AbstractMailboxProcessor<FetchRequest> {
             respondVanished(selected, ranges, responder);
         }
         boolean omitExpunged = (!request.isUseUids());
-        return processMessageRanges(selected, mailbox, ranges, fetch, mailboxSession, responder)
+        return processMessageRanges(selected, mailbox, ranges, fetch, mailboxSession, responder, session)
             // Don't send expunge responses if FETCH is used to trigger this
             // processor. See IMAP-284
             .then(unsolicitedResponses(session, responder, omitExpunged, request.isUseUids()))
@@ -169,28 +226,26 @@ public class FetchProcessor extends AbstractMailboxProcessor<FetchRequest> {
      * Process the given message ranges by fetch them and pass them to the
      * {@link org.apache.james.imap.api.process.ImapProcessor.Responder}
      */
-    private Mono<Void> processMessageRanges(SelectedMailbox selected, MessageManager mailbox, List<MessageRange> ranges, FetchData fetch, MailboxSession mailboxSession, Responder responder) throws MailboxException {
-        FetchResponseBuilder builder = new FetchResponseBuilder(new EnvelopeBuilder());
+    private Mono<Void> processMessageRanges(SelectedMailbox selected, MessageManager mailbox, List<MessageRange> ranges, FetchData fetch, MailboxSession mailboxSession, Responder responder, ImapSession imapSession) {
         FetchGroup resultToFetch = FetchDataConverter.getFetchGroup(fetch);
 
         if (fetch.isOnlyFlags()) {
             return Flux.fromIterable(consolidate(selected, ranges, fetch))
                 .concatMap(range -> Flux.from(mailbox.listMessagesMetadata(range, mailboxSession)))
                 .filter(ids -> !fetch.contains(Item.MODSEQ) || ids.getModSeq().asLong() > fetch.getChangedSince())
-                .concatMap(result -> toResponse(mailbox, fetch, mailboxSession, builder, selected, result))
+                .concatMap(result -> toResponse(mailbox, fetch, mailboxSession, selected, result))
                 .doOnNext(responder::respond)
                 .then();
         } else {
-            return Flux.fromIterable(consolidate(selected, ranges, fetch))
-                .concatMap(range -> {
-                    auditTrail(mailbox, mailboxSession, resultToFetch, range);
-                    return Flux.from(mailbox.getMessagesReactive(range, resultToFetch, mailboxSession))
-                        .filter(ids -> !fetch.contains(Item.MODSEQ) || ids.getModSeq().asLong() > fetch.getChangedSince())
-                        .concatMap(result -> toResponse(mailbox, fetch, mailboxSession, builder, selected, result))
-                        .doOnNext(responder::respond)
-                        .then();
-                })
-                .then();
+            FetchSubscriber fetchSubscriber = new FetchSubscriber(imapSession, responder);
+            Flux.fromIterable(consolidate(selected, ranges, fetch))
+                .doOnNext(range -> auditTrail(mailbox, mailboxSession, resultToFetch, range))
+                .concatMap(range -> Flux.from(mailbox.getMessagesReactive(range, resultToFetch, mailboxSession)))
+                .filter(ids -> !fetch.contains(Item.MODSEQ) || ids.getModSeq().asLong() > fetch.getChangedSince())
+                .concatMap(result -> toResponse(mailbox, fetch, mailboxSession, selected, result))
+                .subscribe(fetchSubscriber);
+
+            return fetchSubscriber.completionMono();
         }
     }
 
@@ -207,9 +262,9 @@ public class FetchProcessor extends AbstractMailboxProcessor<FetchRequest> {
         return MessageRange.toRanges(filter.longStream().mapToObj(MessageUid::of).collect(ImmutableList.toImmutableList()));
     }
 
-    private Mono<FetchResponse> toResponse(MessageManager mailbox, FetchData fetch, MailboxSession mailboxSession, FetchResponseBuilder builder, SelectedMailbox selected, org.apache.james.mailbox.model.ComposedMessageIdWithMetaData result) {
+    private Mono<FetchResponse> toResponse(MessageManager mailbox, FetchData fetch, MailboxSession mailboxSession, SelectedMailbox selected, org.apache.james.mailbox.model.ComposedMessageIdWithMetaData result) {
         try {
-            return builder.build(fetch, result, mailbox, selected, mailboxSession);
+            return new FetchResponseBuilder(new EnvelopeBuilder()).build(fetch, result, mailbox, selected, mailboxSession);
         } catch (MessageRangeException e) {
             // we can't for whatever reason find the message so
             // just skip it and log it to debug
@@ -226,9 +281,9 @@ public class FetchProcessor extends AbstractMailboxProcessor<FetchRequest> {
         }
     }
 
-    private Mono<FetchResponse> toResponse(MessageManager mailbox, FetchData fetch, MailboxSession mailboxSession, FetchResponseBuilder builder, SelectedMailbox selected, MessageResult result) {
+    private Mono<FetchResponse> toResponse(MessageManager mailbox, FetchData fetch, MailboxSession mailboxSession, SelectedMailbox selected, MessageResult result) {
         try {
-            return builder.build(fetch, result, mailbox, selected, mailboxSession);
+            return new FetchResponseBuilder(new EnvelopeBuilder()).build(fetch, result, mailbox, selected, mailboxSession);
         } catch (MessageRangeException e) {
             // we can't for whatever reason find the message so
             // just skip it and log it to debug

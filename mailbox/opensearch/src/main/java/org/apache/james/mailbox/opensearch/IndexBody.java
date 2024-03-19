@@ -17,21 +17,8 @@
  * under the License.                                           *
  ****************************************************************/
 
-package org.apache.james.jmap.rabbitmq.cucumber.awss3;
+package org.apache.james.mailbox.opensearch;
 
-import org.apache.james.jmap.categories.EnableCucumber;
-import org.apache.james.junit.categories.Unstable;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
-
-import cucumber.api.CucumberOptions;
-import cucumber.api.junit.Cucumber;
-
-@RunWith(Cucumber.class)
-@CucumberOptions(features = {"classpath:cucumber/UploadEndpoint.feature"},
-                glue = {"org.apache.james.jmap.draft.methods.integration", "org.apache.james.jmap.rabbitmq.cucumber.awss3"},
-                tags = {"not @Ignore", "@BasicFeature"},
-                strict = true)
-@Category({EnableCucumber.class, Unstable.class})
-public class RabbitMQUploadCucumberTest {
+public enum IndexBody {
+    NO, YES
 }

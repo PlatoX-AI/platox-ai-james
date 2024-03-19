@@ -35,6 +35,7 @@ import org.apache.james.mailbox.events.MailboxEvents.FlagsUpdated;
 import org.apache.james.mailbox.events.MailboxEvents.MailboxDeletion;
 import org.apache.james.mailbox.events.MailboxEvents.MailboxEvent;
 import org.apache.james.mailbox.exception.MailboxException;
+import org.apache.james.mailbox.exception.MailboxNotFoundException;
 import org.apache.james.mailbox.model.Mailbox;
 import org.apache.james.mailbox.model.MailboxId;
 import org.apache.james.mailbox.model.MessageRange;
@@ -43,6 +44,8 @@ import org.apache.james.mailbox.model.UpdatedFlags;
 import org.apache.james.mailbox.store.MailboxSessionMapperFactory;
 import org.apache.james.mailbox.store.mail.MessageMapper.FetchType;
 import org.apache.james.mailbox.store.mail.model.MailboxMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.github.fge.lambdas.Throwing;
 import com.google.common.collect.ImmutableList;
@@ -56,6 +59,8 @@ import reactor.core.scheduler.Schedulers;
  * notified about message changes. This will then allow to update the underlying index.
  */
 public abstract class ListeningMessageSearchIndex implements MessageSearchIndex, EventListener.ReactiveGroupEventListener {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ListeningMessageSearchIndex.class);
+
     public interface SearchOverride {
         boolean applicable(SearchQuery searchQuery, MailboxSession session);
 
@@ -106,7 +111,11 @@ public abstract class ListeningMessageSearchIndex implements MessageSearchIndex,
         if (event instanceof Added) {
             return factory.getMailboxMapper(session)
                 .findMailboxById(mailboxId)
-                .flatMap(mailbox -> handleAdded(session, mailbox, (Added) event));
+                .flatMap(mailbox -> handleAdded(session, mailbox, (Added) event))
+                .onErrorResume(MailboxNotFoundException.class, e -> {
+                    LOGGER.info("Added event skipped for deleted mailbox {}", mailboxId.serialize());
+                    return Mono.empty();
+                });
         } else if (event instanceof Expunged) {
             Expunged expunged = (Expunged) event;
 
@@ -123,16 +132,20 @@ public abstract class ListeningMessageSearchIndex implements MessageSearchIndex,
     }
 
     protected Mono<Void> handleAdded(MailboxSession session, Mailbox mailbox, Added added) {
+        return handleAdded(session, mailbox, added, FetchType.FULL);
+    }
+
+    protected Mono<Void> handleAdded(MailboxSession session, Mailbox mailbox, Added added, FetchType fetchType) {
         return Flux.fromIterable(MessageRange.toRanges(added.getUids()))
-            .concatMap(range -> retrieveMailboxMessages(session, mailbox, range))
+            .concatMap(range -> retrieveMailboxMessages(session, mailbox, range, fetchType))
             .publishOn(Schedulers.parallel())
             .concatMap(mailboxMessage -> add(session, mailbox, mailboxMessage))
             .then();
     }
 
-    private Flux<MailboxMessage> retrieveMailboxMessages(MailboxSession session, Mailbox mailbox, MessageRange range) {
+    private Flux<MailboxMessage> retrieveMailboxMessages(MailboxSession session, Mailbox mailbox, MessageRange range, FetchType fetchType) {
         return factory.getMessageMapper(session)
-            .findInMailboxReactive(mailbox, range, FetchType.FULL, UNLIMITED);
+            .findInMailboxReactive(mailbox, range, fetchType, UNLIMITED);
     }
 
     protected abstract Flux<MessageUid> doSearch(MailboxSession session, Mailbox mailbox, SearchQuery searchQuery) throws MailboxException;

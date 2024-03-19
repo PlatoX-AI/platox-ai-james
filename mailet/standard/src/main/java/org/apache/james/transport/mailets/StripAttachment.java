@@ -50,6 +50,11 @@ import org.apache.commons.io.output.UnsynchronizedByteArrayOutputStream;
 import org.apache.james.javax.MultipartUtil;
 import org.apache.james.mime4j.codec.DecodeMonitor;
 import org.apache.james.mime4j.codec.DecoderUtil;
+import org.apache.james.mime4j.dom.field.ContentDispositionField;
+import org.apache.james.mime4j.field.ContentDispositionFieldLenientImpl;
+import org.apache.james.mime4j.field.ContentTypeFieldLenientImpl;
+import org.apache.james.mime4j.stream.Field;
+import org.apache.james.mime4j.stream.RawField;
 import org.apache.mailet.Attribute;
 import org.apache.mailet.AttributeName;
 import org.apache.mailet.AttributeUtils;
@@ -355,17 +360,26 @@ public class StripAttachment extends GenericMailet {
     }
 
     private void addPartContent(BodyPart bodyPart, Mail mail, String fileName, AttributeName attributeName) throws IOException, MessagingException {
-        ImmutableMap.Builder<String, AttributeValue<?>> fileNamesToPartContent = AttributeUtils
-            .getValueAndCastFromMail(mail, attributeName, MAP_STRING_BYTES_CLASS)
-            .map(ImmutableMap.<String, AttributeValue<?>>builder()::putAll)
-            .orElse(ImmutableMap.builder());
+        ImmutableMap<String, AttributeValue<?>> result = AttributeUtils.getValueAndCastFromMail(mail, attributeName, MAP_STRING_BYTES_CLASS)
+            .map(Throwing.function(previous -> {
+                ImmutableMap.Builder<String, AttributeValue<?>> builder = ImmutableMap.<String, AttributeValue<?>>builder()
+                    .putAll(previous);
+                if (!previous.containsKey(fileName)) {
+                    builder.put(fileName, AttributeValue.of(writeAsBytes(bodyPart)));
+                } else {
+                    LOGGER.info("Duplicated file name {} for {}", fileName, mail.getName());
+                }
+                return builder.build();
+            }))
+            .orElse(ImmutableMap.of(fileName, AttributeValue.of(writeAsBytes(bodyPart))));
 
+        mail.setAttribute(new Attribute(attributeName, AttributeValue.of(result)));
+    }
+
+    private static byte[] writeAsBytes(BodyPart bodyPart) throws IOException, MessagingException {
         UnsynchronizedByteArrayOutputStream byteArrayOutputStream = new UnsynchronizedByteArrayOutputStream();
         bodyPart.writeTo(byteArrayOutputStream);
-        fileNamesToPartContent.put(fileName, AttributeValue.of(byteArrayOutputStream.toByteArray()));
-
-        Map<String, AttributeValue<?>> build = fileNamesToPartContent.build();
-        mail.setAttribute(new Attribute(attributeName, AttributeValue.of(build)));
+        return byteArrayOutputStream.toByteArray();
     }
 
     private void storeFileNameAsAttribute(Mail mail, AttributeValue<String> fileName, boolean hasToBeStored) {
@@ -376,7 +390,18 @@ public class StripAttachment extends GenericMailet {
 
     @VisibleForTesting String getFilename(BodyPart bodyPart) {
         try {
-            String fileName = bodyPart.getFileName();
+            String fileName = Optional.ofNullable(bodyPart.getHeader("Content-Disposition"))
+                .map(h -> h[0])
+                .map(h -> new RawField("Content-Disposition", h))
+                .map(h -> ContentDispositionFieldLenientImpl.PARSER.parse(h, DecodeMonitor.SILENT))
+                .map(ContentDispositionField::getFilename)
+                .or(Throwing.supplier(() -> Optional.ofNullable(bodyPart.getHeader("Content-Type"))
+                    .map(h -> h[0])
+                    .map(h -> new RawField("Content-Type", h))
+                    .map(h -> ContentTypeFieldLenientImpl.PARSER.parse(h, DecodeMonitor.SILENT))
+                    .map(Field::getName)).sneakyThrow())
+                .orElse(null);
+
             if (fileName != null) {
                 return renameWithConfigurationPattern(decodeFilename(fileName));
             }
@@ -458,7 +483,7 @@ public class StripAttachment extends GenericMailet {
     }
 
     private File outputFile(Part part, Optional<String> fileName) throws MessagingException, IOException {
-        Optional<String> maybePartFileName = Optional.ofNullable(part.getFileName());
+        Optional<String> maybePartFileName = fileName.or(Throwing.supplier(() -> Optional.ofNullable(part.getFileName())).sneakyThrow());
         return createTempFile(fileName.orElse(maybePartFileName.orElse(null)));
     }
 
