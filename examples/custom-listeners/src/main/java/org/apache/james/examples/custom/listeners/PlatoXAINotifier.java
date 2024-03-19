@@ -21,19 +21,13 @@ package org.apache.james.examples.custom.listeners;
 
 import javax.inject.Inject;
 
-import jakarta.mail.Flags;
-
 import org.apache.james.events.Event;
 import org.apache.james.events.EventListener;
 import org.apache.james.events.Group;
 import org.apache.james.mailbox.MailboxManager;
 import org.apache.james.mailbox.MailboxSession;
-import org.apache.james.mailbox.MessageManager;
-import org.apache.james.mailbox.MessageManager.FlagsUpdateMode;
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.events.MailboxEvents.Added;
-import org.apache.james.mailbox.exception.MailboxException;
-import org.apache.james.mailbox.model.MessageRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.net.*;
@@ -41,19 +35,17 @@ import java.io.*;
 
 
 /**
- * A Listener to determine the size of added messages.
+ * A Listener to send notification to PlatoX-AI server for added messages.
  *
- * If the size is greater or equals than the BIG_MESSAGE size threshold ({@value ONE_MB}).
- * Then it will be considered as a big message and added BIG_MESSAGE {@value BIG_MESSAGE} flag
  *
  */
 class PlatoXAINotifier implements EventListener.GroupEventListener {
-    public static class PositionCustomFlagOnBigMessagesGroup extends Group {
+    public static class PositionPlatoXAINotifierGroup extends Group {
 
     }
 
-    private static final PositionCustomFlagOnBigMessagesGroup GROUP = new PositionCustomFlagOnBigMessagesGroup();
-    private static final Logger LOGGER = LoggerFactory.getLogger(SetCustomFlagOnBigMessages.class);
+    private static final PositionPlatoXAINotifierGroup GROUP = new PositionPlatoXAINotifierGroup();
+    private static final Logger LOGGER = LoggerFactory.getLogger(PlatoXAINotifier.class);
 
     private final MailboxManager mailboxManager;
 
@@ -72,39 +64,58 @@ class PlatoXAINotifier implements EventListener.GroupEventListener {
     }
 
     private void SendNotification(Added addedEvent, MessageUid messageUid) {
-        String urlStr = "https://api.myip.com";
+        String urlStrDev = "https://curiosity-dev.fly.dev/mail/notification";
+        String urlStrProd = "https://curiosity-prod.fly.dev/mail/notification";
+        String urlStrCcmonet = "https://ccmonet-prod.fly.dev/mail/notification";
+
+        String emailDomainDev = "dev.ccemma.com";
+        String emailDomainProd = "ccemma.com";
+        String emailDomainCcmonet = "ccmonet.com";
+
+        URL url = null;
         try {
             MailboxSession session = mailboxManager.createSystemSession(addedEvent.getUsername());
-            MessageManager messageManager = mailboxManager.getMailbox(addedEvent.getMailboxId(), session);
 
             LOGGER.info("Message Received, with uid {} in mailbox {} of user {}",
             messageUid.asLong(), addedEvent.getMailboxId(), addedEvent.getUsername().asString());
 
-            URL url = new URL(urlStr);
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
-            con.setRequestMethod("GET");
-            con.connect();
-            int status = con.getResponseCode();
-            String body = "";
-            switch(status) {
-                case 200:
-                case 201:
-                    BufferedReader br = new BufferedReader(new InputStreamReader(con.getInputStream()));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        sb.append(line+"\n");
-                    }
-                    br.close();
-                    body = sb.toString();
-                    break;
+            String username = addedEvent.getUsername().asString();
+            if(username.endsWith(emailDomainDev)) {
+                url = new URL(urlStrDev);
+            } else if(username.endsWith(emailDomainProd)) {
+                url = new URL(urlStrProd);
+            } else if(username.endsWith(emailDomainCcmonet)) {
+                url = new URL(urlStrCcmonet);
+            } else {
+                LOGGER.error("Unknown email domain for user {}", username);
             }
-            LOGGER.info("Rquested URL: " + urlStr + " Response: " + status + " Body: " + body);
+
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            OutputStream os = conn.getOutputStream();
+            String input = "{\"event\":{\"type\":\"new\", \"mail\":\"" + addedEvent.getUsername().asString() + "\"}}";
+            os.write(input.getBytes());
+            os.flush();
+            os.close();
+            
+            int status = conn.getResponseCode();
+            BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            String inputLine;
+            StringBuffer responseBody = new StringBuffer();
+            while ((inputLine = in.readLine()) != null) {
+                responseBody.append(inputLine);
+            }
+            in.close();
+            conn.disconnect();
+
+            LOGGER.info("Rquested URL: " + url + " Response: " + status + " requestBody: " + input + " responseBody: " + responseBody.toString());
             System.out.flush();
 
             mailboxManager.endProcessingRequest(session);
         } catch (Exception e) {
-            LOGGER.error("error happens when requesting URL {}, {}", urlStr, e.getMessage());
+            LOGGER.error("error happens when requesting URL {}, {}", url, e.getMessage());
             System.out.flush();
         }
     }

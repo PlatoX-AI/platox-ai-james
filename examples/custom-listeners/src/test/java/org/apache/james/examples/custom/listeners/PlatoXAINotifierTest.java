@@ -56,23 +56,33 @@ import com.google.common.collect.Streams;
 
 class PlatoXAINotifierTest {
 
-    private static final Username USER = Username.of("user");
+    private static final Username devUSER = Username.of("test@dev.ccemma.com");
+    private static final Username prodUSER = Username.of("test@ccemma.com");
+
     private static final Event.EventId RANDOM_EVENT_ID = Event.EventId.random();
-    private static final MailboxPath INBOX_PATH = MailboxPath.inbox(USER);
+    private static final MailboxPath devINBOX_PATH = MailboxPath.inbox(devUSER);
+    private static final MailboxPath prodINBOX_PATH = MailboxPath.inbox(prodUSER);
+
 
     private PlatoXAINotifier testee;
-    private MessageManager inboxMessageManager;
-    private MailboxId inboxId;
-    private MailboxSession mailboxSession;
+    private MessageManager devInboxMessageManager;
+    private MessageManager prodInboxMessageManager;
+    private MailboxId devInboxId;
+    private MailboxId prodInboxId;
+    private MailboxSession devMailboxSession;
+    private MailboxSession prodMailboxSession;
     private InMemoryMailboxManager mailboxManager;
 
     @BeforeEach
     void beforeEach() throws Exception {
         InMemoryIntegrationResources resources = InMemoryIntegrationResources.defaultResources();
         mailboxManager = resources.getMailboxManager();
-        mailboxSession = MailboxSessionUtil.create(USER);
-        inboxId = mailboxManager.createMailbox(INBOX_PATH, mailboxSession).get();
-        inboxMessageManager = mailboxManager.getMailbox(inboxId, mailboxSession);
+        devMailboxSession = MailboxSessionUtil.create(devUSER);
+        prodMailboxSession = MailboxSessionUtil.create(prodUSER);
+        devInboxId = mailboxManager.createMailbox(devINBOX_PATH, devMailboxSession).get();
+        prodInboxId = mailboxManager.createMailbox(prodINBOX_PATH, prodMailboxSession).get();
+        devInboxMessageManager = mailboxManager.getMailbox(devInboxId, devMailboxSession);
+        prodInboxMessageManager = mailboxManager.getMailbox(prodInboxId, prodMailboxSession);
 
         testee = new PlatoXAINotifier(mailboxManager);
 
@@ -81,31 +91,22 @@ class PlatoXAINotifierTest {
 
     @Test
     void shouldKeepBigMessageFlagWhenAlreadySet() throws Exception {
-        ComposedMessageId composedId = inboxMessageManager.appendMessage(
+        ComposedMessageId devComposedId = devInboxMessageManager.appendMessage(
             MessageManager.AppendCommand.builder()
-                .build(smallMessage()),
-            mailboxSession).getId();
+                .build(createMessage()),
+            devMailboxSession).getId();
 
+        ComposedMessageId prodComposedId = prodInboxMessageManager.appendMessage(
+            MessageManager.AppendCommand.builder()
+                .build(createMessage()),
+            prodMailboxSession).getId();  
         assertThat(true);
     }
 
-    private Stream<Flags> getMessageFlags(MessageUid messageUid) throws Exception {
-        return Streams.stream(inboxMessageManager
-            .getMessages(MessageRange.one(messageUid), FetchGroup.MINIMAL, mailboxSession))
-            .map(MessageResult::getFlags);
-    }
-
-    private Message bigMessage() throws Exception {
+    private Message createMessage() throws Exception {
         return Message.Builder.of()
             .setSubject("big message")
             .setBody(Strings.repeat("big message has size greater than one MB", 1024 * 1024), StandardCharsets.UTF_8)
-            .build();
-    }
-
-    private Message smallMessage() throws Exception {
-        return Message.Builder.of()
-            .setSubject("small message")
-            .setBody("small message has size less than one MB", StandardCharsets.UTF_8)
             .build();
     }
 }
