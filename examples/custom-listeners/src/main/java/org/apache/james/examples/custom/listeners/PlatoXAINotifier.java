@@ -58,8 +58,10 @@ class PlatoXAINotifier implements EventListener.GroupEventListener {
     public void event(Event event) {
         if (event instanceof Added) {
             Added addedEvent = (Added) event;
-            addedEvent.getUids().stream()
-                .forEach(messageUid -> SendNotification(addedEvent, messageUid));
+            if(addedEvent.getMailboxPath().isInbox()){
+                addedEvent.getUids().stream()
+                    .forEach(messageUid -> SendNotification(addedEvent, messageUid));
+            }
         }
     }
 
