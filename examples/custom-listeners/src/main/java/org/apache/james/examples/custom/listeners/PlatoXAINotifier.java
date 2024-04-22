@@ -19,7 +19,7 @@
 
 package org.apache.james.examples.custom.listeners;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.apache.james.events.Event;
 import org.apache.james.events.EventListener;
@@ -66,13 +66,15 @@ class PlatoXAINotifier implements EventListener.GroupEventListener {
     }
 
     private void SendNotification(Added addedEvent, MessageUid messageUid) {
-        String urlStrDev = "https://curiosity-dev.fly.dev/mail/notification";
-        String urlStrProd = "https://curiosity-prod.fly.dev/mail/notification";
-        String urlStrCcmonet = "https://ccmonet-prod.fly.dev/mail/notification";
+        String urlStrCcemmaProd = "https://curiosity-prod.fly.dev/mail/notification";
+        String urlStrCcemmaDev = "https://curiosity-dev.fly.dev/mail/notification";
+        String urlStrCcmonetProd = "https://ccmonet-prod.fly.dev/mail/notification";
+        String urlStrCcmonetDev = "https://ccmonet-dev.fly.dev/mail/notification";
 
-        String emailDomainDev = "dev.ccemma.com";
-        String emailDomainProd = "ccemma.com";
-        String emailDomainCcmonet = "ccmonet.com";
+        String emailDomainCcemmaProd = "ccemma.com";
+        String emailDomainCcemmaDev = "dev.ccemma.com";
+        String emailDomainCcmonetProd = "ccmonet.com";
+        String emailDomainCcmonetDev = "dev.ccmonet.com";
 
         URL url = null;
         try {
@@ -82,12 +84,14 @@ class PlatoXAINotifier implements EventListener.GroupEventListener {
             messageUid.asLong(), addedEvent.getMailboxId(), addedEvent.getUsername().asString());
 
             String username = addedEvent.getUsername().asString();
-            if(username.endsWith(emailDomainDev)) {
-                url = new URL(urlStrDev);
-            } else if(username.endsWith(emailDomainProd)) {
-                url = new URL(urlStrProd);
-            } else if(username.endsWith(emailDomainCcmonet)) {
-                url = new URL(urlStrCcmonet);
+            if(username.endsWith(emailDomainCcemmaDev)) {
+                url = new URL(urlStrCcemmaDev);
+            } else if(username.endsWith(emailDomainCcemmaProd)) {
+                url = new URL(urlStrCcemmaProd);
+            } else if(username.endsWith(emailDomainCcmonetDev)) {
+                url = new URL(urlStrCcmonetDev);
+            } else if(username.endsWith(emailDomainCcmonetProd)) {
+                url = new URL(urlStrCcmonetProd);
             } else {
                 LOGGER.error("Unknown email domain for user {}", username);
             }
