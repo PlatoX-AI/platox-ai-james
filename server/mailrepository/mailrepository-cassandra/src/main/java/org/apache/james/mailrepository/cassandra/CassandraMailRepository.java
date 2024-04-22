@@ -25,8 +25,7 @@ import static org.apache.james.util.ReactorUtils.publishIfPresent;
 import java.util.Iterator;
 import java.util.Optional;
 
-import javax.inject.Inject;
-
+import jakarta.inject.Inject;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 
@@ -82,6 +81,8 @@ public class CassandraMailRepository implements MailRepository {
                     "mimeMessageId", Optional.ofNullable(mail.getMessage())
                         .map(Throwing.function(MimeMessage::getMessageID))
                         .orElse(""),
+                    "url", url.asString(),
+                    "error", Optional.ofNullable(mail.getErrorMessage()).orElse(""),
                     "sender", mail.getMaybeSender().asString(),
                     "recipients", StringUtils.join(mail.getRecipients()))))
                 .log("CassandraMailRepository stored mail.")))

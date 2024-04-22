@@ -20,12 +20,12 @@ package org.apache.james.modules;
 
 import java.util.Set;
 
-import javax.inject.Named;
+import jakarta.inject.Named;
 
 import org.apache.james.eventsourcing.Event;
-import org.apache.james.eventsourcing.eventstore.cassandra.EventNestedTypes;
-import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTO;
-import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTOModule;
+import org.apache.james.eventsourcing.eventstore.EventNestedTypes;
+import org.apache.james.eventsourcing.eventstore.dto.EventDTO;
+import org.apache.james.eventsourcing.eventstore.dto.EventDTOModule;
 import org.apache.james.json.DTOConverter;
 import org.apache.james.json.DTOModule;
 import org.apache.james.modules.mailbox.ReIndexingTaskSerializationModule;

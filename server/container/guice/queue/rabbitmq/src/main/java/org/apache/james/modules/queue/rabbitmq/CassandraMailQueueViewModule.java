@@ -18,15 +18,15 @@
  ****************************************************************/
 package org.apache.james.modules.queue.rabbitmq;
 
-import javax.inject.Named;
-import javax.inject.Singleton;
+import jakarta.inject.Named;
+import jakarta.inject.Singleton;
 
 import org.apache.james.backends.cassandra.components.CassandraModule;
 import org.apache.james.blob.api.BlobReferenceSource;
 import org.apache.james.core.healthcheck.HealthCheck;
 import org.apache.james.eventsourcing.Event;
-import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTO;
-import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTOModule;
+import org.apache.james.eventsourcing.eventstore.dto.EventDTO;
+import org.apache.james.eventsourcing.eventstore.dto.EventDTOModule;
 import org.apache.james.lifecycle.api.StartUpCheck;
 import org.apache.james.queue.rabbitmq.view.api.MailQueueView;
 import org.apache.james.queue.rabbitmq.view.cassandra.BrowseStartDAO;

@@ -28,20 +28,19 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import javax.persistence.Basic;
-import javax.persistence.CascadeType;
-import javax.persistence.Column;
-import javax.persistence.Embeddable;
-import javax.persistence.FetchType;
-import javax.persistence.Id;
-import javax.persistence.IdClass;
-import javax.persistence.ManyToOne;
-import javax.persistence.MappedSuperclass;
-import javax.persistence.NamedQuery;
-import javax.persistence.OneToMany;
-import javax.persistence.OrderBy;
-
 import jakarta.mail.Flags;
+import jakarta.persistence.Basic;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.NamedQuery;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 
 import org.apache.james.mailbox.MessageUid;
 import org.apache.james.mailbox.ModSeq;
@@ -50,12 +49,12 @@ import org.apache.james.mailbox.jpa.JPAId;
 import org.apache.james.mailbox.jpa.mail.model.JPAMailbox;
 import org.apache.james.mailbox.jpa.mail.model.JPAProperty;
 import org.apache.james.mailbox.jpa.mail.model.JPAUserFlag;
-import org.apache.james.mailbox.model.AttachmentId;
 import org.apache.james.mailbox.model.ComposedMessageId;
 import org.apache.james.mailbox.model.ComposedMessageIdWithMetaData;
 import org.apache.james.mailbox.model.MessageAttachmentMetadata;
 import org.apache.james.mailbox.model.MessageId;
 import org.apache.james.mailbox.model.ParsedAttachment;
+import org.apache.james.mailbox.model.StringBackedAttachmentId;
 import org.apache.james.mailbox.model.ThreadId;
 import org.apache.james.mailbox.store.mail.model.DefaultMessageId;
 import org.apache.james.mailbox.store.mail.model.DelegatingMailboxMessage;
@@ -574,7 +573,7 @@ public abstract class AbstractJPAMailboxMessage implements MailboxMessage {
         }
     }
 
-    private AttachmentId generateFixedAttachmentId(int position) {
-        return AttachmentId.from(getMailboxId().serialize() + "-" + getUid().asLong() + "-" + position);
+    private StringBackedAttachmentId generateFixedAttachmentId(int position) {
+        return StringBackedAttachmentId.from(getMailboxId().serialize() + "-" + getUid().asLong() + "-" + position);
     }
 }

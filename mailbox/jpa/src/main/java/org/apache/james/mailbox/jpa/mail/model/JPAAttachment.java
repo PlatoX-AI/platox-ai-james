@@ -25,20 +25,20 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.Optional;
 
-import javax.persistence.Basic;
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.FetchType;
-import javax.persistence.GeneratedValue;
-import javax.persistence.Id;
-import javax.persistence.Lob;
-import javax.persistence.NamedQuery;
-import javax.persistence.Table;
+import jakarta.persistence.Basic;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.Lob;
+import jakarta.persistence.NamedQuery;
+import jakarta.persistence.Table;
 
-import org.apache.james.mailbox.model.AttachmentId;
 import org.apache.james.mailbox.model.AttachmentMetadata;
 import org.apache.james.mailbox.model.Cid;
 import org.apache.james.mailbox.model.MessageAttachmentMetadata;
+import org.apache.james.mailbox.model.StringBackedAttachmentId;
 import org.apache.james.mailbox.store.mail.model.DefaultMessageId;
 
 @Entity(name = "Attachment")
@@ -102,7 +102,7 @@ public class JPAAttachment {
 
     public AttachmentMetadata toAttachmentMetadata() {
         return AttachmentMetadata.builder()
-            .attachmentId(AttachmentId.from(attachmentId))
+            .attachmentId(StringBackedAttachmentId.from(attachmentId))
             .messageId(new DefaultMessageId())
             .type(type)
             .size(size)

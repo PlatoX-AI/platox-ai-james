@@ -27,6 +27,46 @@ Change list:
  - [RRT forwards now rewrite senders](#rrt-forwards-now-rewrite-senders)
  - [Increase RabbitMQ consumer timeout on the task queue](#increase-rabbitmq-consumer-timeout-on-the-task-queue)
  - [JMX authentication for Spring](#jmx-authentication-for-spring)
+ - [Java 21](#java-21)
+ - [javax -> jakarta](#javax---jakarta)
+ - [Make all queues on RabbitMQ quorum queue when `quorum.queues.enable=true`](#make-all-queues-on-rabbitmq-quorum-queue-when-quorumqueuesenabletrue)
+
+### Make all queues on RabbitMQ quorum queue when `quorum.queues.enable=true`
+
+Date: 16/04/2024
+
+JIRA: https://issues.apache.org/jira/browse/JAMES-4027
+
+Now `quorum.queues.enable=true` enforces all the queues used by James to be quorum queue to achieve fully high availability.
+
+Some old classic queues (e.g. JMAP and mailbox eventbus work queues) would need to be deleted and let James re-create them as quorum queues.
+
+### Java 21
+
+Date: 25/03/2024
+
+Apache James now requires the use of Java 21 and of maven 3.8.1+.
+
+Extension developer might need to upgrade their extensions as well.
+
+### javax -> jakarta
+
+Date: 25/03/2024
+
+Apache James migrated to jakarta as a replacement for javax.
+
+Extension developers needs to also rely on Jakarta. This is mostly an import change:
+
+```java
+import javax.xxx;
+```
+
+Would become:
+
+
+```java
+import jakarta.xxx;
+```
 
 ### JMX authentication for Spring
 

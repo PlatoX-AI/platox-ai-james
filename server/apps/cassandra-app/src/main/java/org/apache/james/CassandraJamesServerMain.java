@@ -22,8 +22,8 @@ package org.apache.james;
 import java.util.Set;
 
 import org.apache.james.data.UsersRepositoryModuleChooser;
-import org.apache.james.eventsourcing.eventstore.cassandra.EventNestedTypes;
-import org.apache.james.jmap.draft.JMAPListenerModule;
+import org.apache.james.eventsourcing.eventstore.EventNestedTypes;
+import org.apache.james.jmap.JMAPListenerModule;
 import org.apache.james.json.DTOModule;
 import org.apache.james.modules.BlobExportMechanismModule;
 import org.apache.james.modules.CassandraConsistencyTaskSerializationModule;

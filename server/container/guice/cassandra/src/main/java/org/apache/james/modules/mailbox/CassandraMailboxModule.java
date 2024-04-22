@@ -22,7 +22,7 @@ import static org.apache.james.modules.Names.MAILBOXMANAGER_NAME;
 
 import java.io.FileNotFoundException;
 
-import javax.inject.Singleton;
+import jakarta.inject.Singleton;
 
 import org.apache.commons.configuration2.Configuration;
 import org.apache.commons.configuration2.ex.ConfigurationException;
@@ -36,11 +36,11 @@ import org.apache.james.backends.cassandra.init.configuration.CassandraConfigura
 import org.apache.james.blob.api.BlobReferenceSource;
 import org.apache.james.events.EventListener;
 import org.apache.james.eventsourcing.Event;
+import org.apache.james.eventsourcing.eventstore.JsonEventSerializer;
 import org.apache.james.eventsourcing.eventstore.cassandra.CassandraEventStore;
 import org.apache.james.eventsourcing.eventstore.cassandra.EventStoreDao;
-import org.apache.james.eventsourcing.eventstore.cassandra.JsonEventSerializer;
-import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTO;
-import org.apache.james.eventsourcing.eventstore.cassandra.dto.EventDTOModule;
+import org.apache.james.eventsourcing.eventstore.dto.EventDTO;
+import org.apache.james.eventsourcing.eventstore.dto.EventDTOModule;
 import org.apache.james.jmap.api.change.EmailChangeRepository;
 import org.apache.james.jmap.api.change.Limit;
 import org.apache.james.jmap.api.change.MailboxChangeRepository;
@@ -52,6 +52,7 @@ import org.apache.james.jmap.cassandra.change.CassandraStateFactory;
 import org.apache.james.jmap.cassandra.change.EmailChangeRepositoryDAO;
 import org.apache.james.jmap.cassandra.change.MailboxChangeRepositoryDAO;
 import org.apache.james.mailbox.AttachmentContentLoader;
+import org.apache.james.mailbox.AttachmentIdFactory;
 import org.apache.james.mailbox.AttachmentManager;
 import org.apache.james.mailbox.Authenticator;
 import org.apache.james.mailbox.MailboxManager;
@@ -59,6 +60,7 @@ import org.apache.james.mailbox.MailboxPathLocker;
 import org.apache.james.mailbox.MessageIdManager;
 import org.apache.james.mailbox.RightManager;
 import org.apache.james.mailbox.SessionProvider;
+import org.apache.james.mailbox.StringBackedAttachmentIdFactory;
 import org.apache.james.mailbox.SubscriptionManager;
 import org.apache.james.mailbox.cassandra.CassandraMailboxManager;
 import org.apache.james.mailbox.cassandra.CassandraMailboxSessionMapperFactory;
@@ -184,6 +186,7 @@ public class CassandraMailboxModule extends AbstractModule {
 
         bind(MessageMapperFactory.class).to(CassandraMailboxSessionMapperFactory.class);
         bind(MailboxMapperFactory.class).to(CassandraMailboxSessionMapperFactory.class);
+        bind(AttachmentIdFactory.class).to(StringBackedAttachmentIdFactory.class);
         bind(AttachmentMapperFactory.class).to(CassandraMailboxSessionMapperFactory.class);
         bind(MailboxSessionMapperFactory.class).to(CassandraMailboxSessionMapperFactory.class);
         bind(SubscriptionMapperFactory.class).to(CassandraMailboxSessionMapperFactory.class);

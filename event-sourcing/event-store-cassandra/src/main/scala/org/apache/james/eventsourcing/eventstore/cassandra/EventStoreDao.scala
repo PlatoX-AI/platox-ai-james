@@ -24,10 +24,10 @@ import com.datastax.oss.driver.api.core.`type`.codec.TypeCodecs
 import com.datastax.oss.driver.api.core.cql.{BatchStatementBuilder, BatchType, BoundStatement, PreparedStatement, Row, Statement}
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder.{bindMarker, insertInto, update}
-import javax.inject.Inject
+import jakarta.inject.Inject
 import org.apache.james.backends.cassandra.init.configuration.JamesExecutionProfiles
 import org.apache.james.backends.cassandra.utils.CassandraAsyncExecutor
-import org.apache.james.eventsourcing.eventstore.History
+import org.apache.james.eventsourcing.eventstore.{History, JsonEventSerializer}
 import org.apache.james.eventsourcing.eventstore.cassandra.CassandraEventStoreTable.{AGGREGATE_ID, EVENT, EVENTS_TABLE, EVENT_ID, SNAPSHOT}
 import org.apache.james.eventsourcing.{AggregateId, Event, EventId}
 import org.apache.james.util.ReactorUtils

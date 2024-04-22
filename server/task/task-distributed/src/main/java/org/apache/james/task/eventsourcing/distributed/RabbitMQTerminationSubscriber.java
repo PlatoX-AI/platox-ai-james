@@ -21,6 +21,8 @@ package org.apache.james.task.eventsourcing.distributed;
 
 import static org.apache.james.backends.rabbitmq.Constants.AUTO_DELETE;
 import static org.apache.james.backends.rabbitmq.Constants.DURABLE;
+import static org.apache.james.backends.rabbitmq.Constants.evaluateAutoDelete;
+import static org.apache.james.backends.rabbitmq.Constants.evaluateDurable;
 import static org.apache.james.util.ReactorUtils.publishIfPresent;
 import static reactor.core.publisher.Sinks.EmitFailureHandler.FAIL_FAST;
 
@@ -28,14 +30,14 @@ import java.io.Closeable;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
-import javax.annotation.PreDestroy;
-import javax.inject.Inject;
+import jakarta.annotation.PreDestroy;
+import jakarta.inject.Inject;
 
 import org.apache.james.backends.rabbitmq.QueueArguments;
 import org.apache.james.backends.rabbitmq.RabbitMQConfiguration;
 import org.apache.james.backends.rabbitmq.ReceiverProvider;
 import org.apache.james.eventsourcing.Event;
-import org.apache.james.eventsourcing.eventstore.cassandra.JsonEventSerializer;
+import org.apache.james.eventsourcing.eventstore.JsonEventSerializer;
 import org.apache.james.lifecycle.api.Startable;
 import org.apache.james.task.eventsourcing.TerminationSubscriber;
 import org.reactivestreams.Publisher;
@@ -84,9 +86,13 @@ public class RabbitMQTerminationSubscriber implements TerminationSubscriber, Sta
 
     public void start() {
         sender.declareExchange(ExchangeSpecification.exchange(EXCHANGE_NAME)).block();
-        QueueArguments.Builder builder = QueueArguments.builder();
+        QueueArguments.Builder builder = rabbitMQConfiguration.workQueueArgumentsBuilder();
         rabbitMQConfiguration.getQueueTTL().ifPresent(builder::queueTTL);
-        sender.declare(QueueSpecification.queue(queueName.asString()).durable(!DURABLE).autoDelete(!AUTO_DELETE).arguments(builder.build())).block();
+        sender.declare(QueueSpecification.queue(queueName.asString())
+            .durable(evaluateDurable(!DURABLE, rabbitMQConfiguration.isQuorumQueuesUsed()))
+            .autoDelete(evaluateAutoDelete(!AUTO_DELETE, rabbitMQConfiguration.isQuorumQueuesUsed()))
+            .arguments(builder.build()))
+            .block();
         sender.bind(BindingSpecification.binding(EXCHANGE_NAME, ROUTING_KEY, queueName.asString())).block();
         sendQueue = Sinks.many().unicast().onBackpressureBuffer();
         sendQueueHandle = sender

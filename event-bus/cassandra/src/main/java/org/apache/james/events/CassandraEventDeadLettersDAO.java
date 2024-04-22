@@ -28,7 +28,7 @@ import static org.apache.james.events.tables.CassandraEventDeadLettersTable.GROU
 import static org.apache.james.events.tables.CassandraEventDeadLettersTable.INSERTION_ID;
 import static org.apache.james.events.tables.CassandraEventDeadLettersTable.TABLE_NAME;
 
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
 import org.apache.james.backends.cassandra.utils.CassandraAsyncExecutor;
 
@@ -49,7 +49,7 @@ public class CassandraEventDeadLettersDAO {
     private final PreparedStatement containEventsStatement;
 
     @Inject
-    CassandraEventDeadLettersDAO(CqlSession session, EventSerializer eventSerializer) {
+    public CassandraEventDeadLettersDAO(CqlSession session, EventSerializer eventSerializer) {
         this.executor = new CassandraAsyncExecutor(session);
         this.eventSerializer = eventSerializer;
         this.insertStatement = prepareInsertStatement(session);

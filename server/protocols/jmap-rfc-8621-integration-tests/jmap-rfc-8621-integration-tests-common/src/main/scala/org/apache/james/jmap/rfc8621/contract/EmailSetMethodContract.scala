@@ -40,11 +40,11 @@ import org.apache.james.jmap.api.change.State
 import org.apache.james.jmap.core.ResponseObject.SESSION_STATE
 import org.apache.james.jmap.core.UTCDate
 import org.apache.james.jmap.core.UuidState.INSTANCE
-import org.apache.james.jmap.draft.{JmapGuiceProbe, MessageIdProbe}
 import org.apache.james.jmap.http.UserCredential
 import org.apache.james.jmap.rfc8621.contract.DownloadContract.accountId
 import org.apache.james.jmap.rfc8621.contract.Fixture.{ACCEPT_RFC8621_VERSION_HEADER, ACCOUNT_ID, ANDRE, ANDRE_ACCOUNT_ID, ANDRE_PASSWORD, BOB, BOB_PASSWORD, DOMAIN, authScheme, baseRequestSpecBuilder}
 import org.apache.james.jmap.rfc8621.contract.probe.DelegationProbe
+import org.apache.james.jmap.{JmapGuiceProbe, MessageIdProbe}
 import org.apache.james.mailbox.MessageManager.AppendCommand
 import org.apache.james.mailbox.model.MailboxACL.Right
 import org.apache.james.mailbox.model.{ComposedMessageId, MailboxACL, MailboxConstants, MailboxId, MailboxPath, MessageId}
@@ -59,7 +59,7 @@ import org.awaitility.Awaitility
 import org.awaitility.Durations.ONE_HUNDRED_MILLISECONDS
 import org.hamcrest.Matchers
 import org.hamcrest.Matchers.{equalTo, not}
-import org.junit.jupiter.api.{BeforeEach, Disabled, Test}
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import play.api.libs.json.{JsNumber, JsString, Json}
@@ -7677,14 +7677,22 @@ trait EmailSetMethodContract {
       .body
       .asString
 
+    val messageId = Json.parse(response)
+      .\("methodResponses")
+      .\(0).\(1)
+      .\("created")
+      .\("e1526")
+      .\("id")
+      .get.asInstanceOf[JsString].value
+
     assertThatJson(response)
       .inPath("methodResponses[1][1].list")
-      .isEqualTo("""[{
+      .isEqualTo(s"""[{
                    |    "to": [{
                    |        "name": "name1",
                    |        "email": "invalid1"
                    |      }],
-                   |    "id": "1",
+                   |    "id": "$messageId",
                    |    "from": [{
                    |        "email": "bob@domain.tld"
                    |      }
